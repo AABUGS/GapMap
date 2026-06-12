@@ -1,8 +1,8 @@
 /*
- * gapmap.c — GapMap: Section-Gap Payload Mapping PoC
+ * gapmap.c - GapMap: Section-Gap Payload Mapping PoC
  *
  * Maps a PIC payload into the alignment gap at the tail of a loaded
- * system DLL's .text section. The gap is already PAGE_EXECUTE_READ —
+ * system DLL's .text section. The gap is already PAGE_EXECUTE_READ,
  * no protection change persists.
  *
  * 64-bit Windows only.

