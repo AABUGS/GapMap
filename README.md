@@ -5,8 +5,8 @@ DLL and executes it from there.
 
 When Windows loads a DLL, each section aligns to 0x1000 (4KB page boundary). Sections
 rarely end exactly on a page boundary, so the remaining bytes are zero-filled padding.
-These bytes are mapped, accessible, and share the page protection of the section they
-belong to. If the section is `.text`, the padding is already `PAGE_EXECUTE_READ`.
+These bytes are mapped and share the page protection of the section they sit in. Tail
+of `.text` = already `PAGE_EXECUTE_READ`.
 
 GapMap finds the largest `.text` tail gap across loaded system DLLs, writes a payload
 into the padding, and launches it. The pages are already executable — no protection
@@ -47,8 +47,7 @@ section — the gap before it is pure alignment padding, zero-referenced at runt
    range
 
 The `VirtualProtect` round-trip is the only API call that touches the target pages.
-After the write, the final page state is identical to the original — `PAGE_EXECUTE_READ`
-with the DLL's normal attributes. A scanner checking protection flags sees nothing wrong.
+After the write, the page state is back to the original `PAGE_EXECUTE_READ`.
 
 ## Detection
 
@@ -56,7 +55,7 @@ with the DLL's normal attributes. A scanner checking protection flags sees nothi
   with manual syscalls.
 - **CI/HVCI page hashes** validate page contents against the PE's authenticode catalog
   at page-in time. If the modified page gets paged out and back in, the hash won't match.
-  This is the strongest detection vector — only applies on HVCI-enabled systems.
+  Only applies on HVCI-enabled systems.
 - **Disk-vs-memory byte comparison** of the full page (including padding past
   `VirtualSize`) would catch the non-zero bytes. Most integrity checkers only hash up to
   `VirtualSize` and miss the padding.
